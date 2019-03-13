@@ -1,4 +1,4 @@
-package com.senssun.commonutils;
+package com.senssun.permission;
 
 import android.app.Activity;
 import android.content.Context;

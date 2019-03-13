@@ -1,4 +1,4 @@
-package com.senssun.commonutils;
+package com.senssun.permission;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;

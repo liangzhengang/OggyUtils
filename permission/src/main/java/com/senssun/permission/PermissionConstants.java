@@ -1,4 +1,4 @@
-package com.senssun.commonutils;
+package com.senssun.permission;
 
 import android.Manifest;
 import android.Manifest.permission;

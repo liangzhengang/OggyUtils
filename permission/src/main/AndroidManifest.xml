@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.senssun.permission" >
+
+    <application>
+        <activity
+            android:name=".PermissionUtils$PermissionActivity"
+            android:theme="@style/Transparent_Activity" />
+    </application>
+</manifest>
