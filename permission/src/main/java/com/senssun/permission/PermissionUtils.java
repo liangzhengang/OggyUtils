@@ -299,7 +299,7 @@ public final class PermissionUtils {
             }
             super.onCreate(savedInstanceState);
 
-            if (sInstance.rationale(this)) {
+            if (!sInstance.rationale(this)) {
                 finish();
                 return;
             }
