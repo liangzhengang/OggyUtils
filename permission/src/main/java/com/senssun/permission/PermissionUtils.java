@@ -246,7 +246,7 @@ public final class PermissionUtils {
         boolean isRationale = false;
         if (mOnRationaleListener != null) {
             for (String permission : mPermissionsRequest) {
-                if (activity.shouldShowRequestPermissionRationale(permission)) {
+                if (!activity.shouldShowRequestPermissionRationale(permission)) {
                     getPermissionsStatus(activity);
                     mOnRationaleListener.rationale(new OnRationaleListener.ShouldRequest() {
                         @Override
@@ -337,10 +337,7 @@ public final class PermissionUtils {
             }
             super.onCreate(savedInstanceState);
 
-            if (sInstance.rationale(this)) {
-                finish();
-                return;
-            }
+       
             if (sInstance.mPermissionsRequest != null) {
                 int size = sInstance.mPermissionsRequest.size();
                 if (size <= 0) {
