@@ -10,7 +10,9 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
+import android.support.v4.app.AppOpsManagerCompat;
 import android.support.v4.content.ContextCompat;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.WindowManager;
@@ -38,9 +40,9 @@ public final class PermissionUtils {
     private static PermissionUtils sInstance;
 
     private OnRationaleListener mOnRationaleListener;
-    private SimpleCallback      mSimpleCallback;
-    private FullCallback        mFullCallback;
-    private ThemeCallback       mThemeCallback;
+    private SimpleCallback mSimpleCallback;
+    private FullCallback mFullCallback;
+    private ThemeCallback mThemeCallback;
     private Set<String> mPermissions;
     private List<String> mPermissionsRequest;
     private List<String> mPermissionsGranted;
@@ -87,6 +89,42 @@ public final class PermissionUtils {
                 return false;
             }
         }
+        return true;
+    }
+
+    /**
+     * 系统层的权限判断
+     *
+     * @param context     上下文
+     * @param permissions 申请的权限 Manifest.permission.READ_CONTACTS
+     * @return 是否有权限 ：其中有一个获取不了就是失败了
+     */
+    public static boolean hasPermissions(@NonNull Context context, @NonNull List<String> permissions) {
+        for (String permission : permissions) {
+            String op = AppOpsManagerCompat.permissionToOp(permission);
+            if (TextUtils.isEmpty(op)) continue;
+            int result = AppOpsManagerCompat.noteProxyOp(context, op, context.getPackageName());
+            if (result == AppOpsManagerCompat.MODE_IGNORED) return false;
+            result = ContextCompat.checkSelfPermission(context, permission);
+            if (result != PackageManager.PERMISSION_GRANTED) return false;
+        }
+        return true;
+    }
+
+    /**
+     * 系统层的权限判断
+     *
+     * @param context     上下文
+     * @param permission 申请的权限 Manifest.permission.READ_CONTACTS
+     * @return 是否有权限 ：其中有一个获取不了就是失败了
+     */
+    public static boolean hasPermission(@NonNull Context context, @NonNull String permission) {
+        String op = AppOpsManagerCompat.permissionToOp(permission);
+        if (TextUtils.isEmpty(op)) return true;
+        int result = AppOpsManagerCompat.noteProxyOp(context, op, context.getPackageName());
+        if (result == AppOpsManagerCompat.MODE_IGNORED) return false;
+        result = ContextCompat.checkSelfPermission(context, permission);
+        if (result != PackageManager.PERMISSION_GRANTED) return false;
         return true;
     }
 
@@ -182,7 +220,7 @@ public final class PermissionUtils {
             requestCallback();
         } else {
             for (String permission : mPermissions) {
-                if (isGranted(permission)) {
+                if (hasPermission(Utils.getApp(),permission)) {
                     mPermissionsGranted.add(permission);
                 } else {
                     mPermissionsRequest.add(permission);
