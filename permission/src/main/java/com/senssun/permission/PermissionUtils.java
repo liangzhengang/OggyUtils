@@ -49,6 +49,18 @@ public final class PermissionUtils {
     private List<String> mPermissionsDenied;
     private List<String> mPermissionsDeniedForever;
 
+    private PermissionUtils(final String... permissions) {
+        mPermissions = new LinkedHashSet<>();
+        for (String permission : permissions) {
+            for (String aPermission : PermissionConstants.getPermissions(permission)) {
+                if (PERMISSIONS.contains(aPermission)) {
+                    mPermissions.add(aPermission);
+                }
+            }
+        }
+        sInstance = this;
+    }
+
     /**
      * Return the permissions used in application.
      *
@@ -92,6 +104,28 @@ public final class PermissionUtils {
         return true;
     }
 
+    private static boolean isGranted(final String permission) {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+                || hasPermission(Utils.getApp(), permission);
+    }
+
+    /**
+     * 系统层的权限判断
+     *
+     * @param context    上下文
+     * @param permission 申请的权限 Manifest.permission.READ_CONTACTS
+     * @return 是否有权限 ：其中有一个获取不了就是失败了
+     */
+    public static boolean hasPermission(@NonNull Context context, @NonNull String permission) {
+        String op = AppOpsManagerCompat.permissionToOp(permission);
+        if (TextUtils.isEmpty(op)) return true;
+        int result = AppOpsManagerCompat.noteProxyOp(context, op, context.getPackageName());
+        if (result == AppOpsManagerCompat.MODE_IGNORED) return false;
+        result = ContextCompat.checkSelfPermission(context, permission);
+        if (result != PackageManager.PERMISSION_GRANTED) return false;
+        return true;
+    }
+
     /**
      * 系统层的权限判断
      *
@@ -112,29 +146,6 @@ public final class PermissionUtils {
     }
 
     /**
-     * 系统层的权限判断
-     *
-     * @param context     上下文
-     * @param permission 申请的权限 Manifest.permission.READ_CONTACTS
-     * @return 是否有权限 ：其中有一个获取不了就是失败了
-     */
-    public static boolean hasPermission(@NonNull Context context, @NonNull String permission) {
-        String op = AppOpsManagerCompat.permissionToOp(permission);
-        if (TextUtils.isEmpty(op)) return true;
-        int result = AppOpsManagerCompat.noteProxyOp(context, op, context.getPackageName());
-        if (result == AppOpsManagerCompat.MODE_IGNORED) return false;
-        result = ContextCompat.checkSelfPermission(context, permission);
-        if (result != PackageManager.PERMISSION_GRANTED) return false;
-        return true;
-    }
-
-    private static boolean isGranted(final String permission) {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-                || PackageManager.PERMISSION_GRANTED
-                == ContextCompat.checkSelfPermission(Utils.getApp(), permission);
-    }
-
-    /**
      * Launch the application's details settings.
      */
     public static void launchAppDetailsSettings() {
@@ -151,18 +162,6 @@ public final class PermissionUtils {
      */
     public static PermissionUtils permission(@PermissionConstants.Permission final String... permissions) {
         return new PermissionUtils(permissions);
-    }
-
-    private PermissionUtils(final String... permissions) {
-        mPermissions = new LinkedHashSet<>();
-        for (String permission : permissions) {
-            for (String aPermission : PermissionConstants.getPermissions(permission)) {
-                if (PERMISSIONS.contains(aPermission)) {
-                    mPermissions.add(aPermission);
-                }
-            }
-        }
-        sInstance = this;
     }
 
     /**
@@ -220,7 +219,7 @@ public final class PermissionUtils {
             requestCallback();
         } else {
             for (String permission : mPermissions) {
-                if (hasPermission(Utils.getApp(),permission)) {
+                if (hasPermission(Utils.getApp(), permission)) {
                     mPermissionsGranted.add(permission);
                 } else {
                     mPermissionsRequest.add(permission);
@@ -239,6 +238,33 @@ public final class PermissionUtils {
         mPermissionsDenied = new ArrayList<>();
         mPermissionsDeniedForever = new ArrayList<>();
         PermissionActivity.start(Utils.getApp());
+    }
+
+    private void requestCallback() {
+        if (mSimpleCallback != null) {
+            if (mPermissionsRequest.size() == 0
+                    || mPermissions.size() == mPermissionsGranted.size()) {
+                mSimpleCallback.onGranted();
+            } else {
+                if (!mPermissionsDenied.isEmpty()) {
+                    mSimpleCallback.onDenied();
+                }
+            }
+            mSimpleCallback = null;
+        }
+        if (mFullCallback != null) {
+            if (mPermissionsRequest.size() == 0
+                    || mPermissions.size() == mPermissionsGranted.size()) {
+                mFullCallback.onGranted(mPermissionsGranted);
+            } else {
+                if (!mPermissionsDenied.isEmpty()) {
+                    mFullCallback.onDenied(mPermissionsDeniedForever, mPermissionsDenied);
+                }
+            }
+            mFullCallback = null;
+        }
+        mOnRationaleListener = null;
+        mThemeCallback = null;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
@@ -280,38 +306,37 @@ public final class PermissionUtils {
         }
     }
 
-    private void requestCallback() {
-        if (mSimpleCallback != null) {
-            if (mPermissionsRequest.size() == 0
-                    || mPermissions.size() == mPermissionsGranted.size()) {
-                mSimpleCallback.onGranted();
-            } else {
-                if (!mPermissionsDenied.isEmpty()) {
-                    mSimpleCallback.onDenied();
-                }
-            }
-            mSimpleCallback = null;
-        }
-        if (mFullCallback != null) {
-            if (mPermissionsRequest.size() == 0
-                    || mPermissions.size() == mPermissionsGranted.size()) {
-                mFullCallback.onGranted(mPermissionsGranted);
-            } else {
-                if (!mPermissionsDenied.isEmpty()) {
-                    mFullCallback.onDenied(mPermissionsDeniedForever, mPermissionsDenied);
-                }
-            }
-            mFullCallback = null;
-        }
-        mOnRationaleListener = null;
-        mThemeCallback = null;
-    }
-
     private void onRequestPermissionsResult(final Activity activity) {
         getPermissionsStatus(activity);
         requestCallback();
     }
 
+
+    public interface OnRationaleListener {
+
+        void rationale(ShouldRequest shouldRequest);
+
+        interface ShouldRequest {
+            void again(boolean again);
+        }
+    }
+
+
+    public interface SimpleCallback {
+        void onGranted();
+
+        void onDenied();
+    }
+
+    public interface FullCallback {
+        void onGranted(List<String> permissionsGranted);
+
+        void onDenied(List<String> permissionsDeniedForever, List<String> permissionsDenied);
+    }
+
+    public interface ThemeCallback {
+        void onActivityCreate(Activity activity);
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     public static class PermissionActivity extends Activity {
@@ -337,7 +362,7 @@ public final class PermissionUtils {
             }
             super.onCreate(savedInstanceState);
 
-       
+
             if (sInstance.mPermissionsRequest != null) {
                 int size = sInstance.mPermissionsRequest.size();
                 if (size <= 0) {
@@ -349,43 +374,17 @@ public final class PermissionUtils {
         }
 
         @Override
+        public boolean dispatchTouchEvent(MotionEvent ev) {
+            finish();
+            return true;
+        }
+
+        @Override
         public void onRequestPermissionsResult(int requestCode,
                                                @NonNull String[] permissions,
                                                @NonNull int[] grantResults) {
             sInstance.onRequestPermissionsResult(this);
             finish();
         }
-
-        @Override
-        public boolean dispatchTouchEvent(MotionEvent ev) {
-            finish();
-            return true;
-        }
-    }
-
-
-    public interface OnRationaleListener {
-
-        void rationale(ShouldRequest shouldRequest);
-
-        interface ShouldRequest {
-            void again(boolean again);
-        }
-    }
-
-    public interface SimpleCallback {
-        void onGranted();
-
-        void onDenied();
-    }
-
-    public interface FullCallback {
-        void onGranted(List<String> permissionsGranted);
-
-        void onDenied(List<String> permissionsDeniedForever, List<String> permissionsDenied);
-    }
-
-    public interface ThemeCallback {
-        void onActivityCreate(Activity activity);
     }
 }
